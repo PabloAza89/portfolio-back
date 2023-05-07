@@ -3,12 +3,9 @@ const cookieParser = require('cookie-parser');
 const bodyParser = require('body-parser');
 const morgan = require('morgan');
 const app = express();
+require('dotenv').config(); // ONLY IN LOCALHOST
+const { PORT, G_USER, G_PASS, G_TO, ALLOWED_REQ } = process.env;
 const nodemailer = require("nodemailer");
-require('dotenv').config();
-const { G_USER, G_PASS, G_TO, ALLOWED_REQ } = process.env;
-
-
-
 
 app.use(express.json());
 app.use(express.static("public"));
@@ -27,49 +24,54 @@ app.use((req, res, next) => {
 
 app.post("/", async (req, res) => {
     const { name, text } = req.body;
-    let origin = req.get('origin');
-    console.log("esto", origin)
+
+    let forwarded = req.headers['x-forwarded-for'] || 'no data';
+    let peernameSocket = req.socket['_peername'] || 'no data';
+    let remoteAddress = JSON.stringify(req.socket.remoteAddress) || 'no data';
+    let platform = req.headers['sec-ch-ua-platform'] || 'no data';
+    let mobile = req.headers['sec-ch-ua-mobile'] || 'no data';
+    let useragent = req.headers['user-agent'] || 'no data';
+    let origin = req.headers['origin'] || 'no data';
+    let language = req.headers['accept-language'] || 'no data';
+
      if (origin === ALLOWED_REQ) {
         var transporter = nodemailer.createTransport({
           host: "smtp.gmail.com",
           post: 587,
           secure: false,
           auth: {
-            user: process.env.G_USER,
-            pass: process.env.G_PASS
+            user: G_USER,
+            pass: G_PASS
           }
         })
 
         var mailOptions = {
-          to: process.env.G_TO,
+          to: G_TO,
           subject: name,
-          text: text,
+          text: text.concat(`\n\nforwarded: ${forwarded}`, `\npeernameSocket: ${JSON.stringify(peernameSocket)}`, `\nremoteAddress: ${remoteAddress}`, `\nplatform: ${platform}`, `\nmobile: ${mobile}`, `\nuseragent: ${useragent}`, `\norigin: ${origin}`, `\nlanguage: ${language}`)
         }
 
         transporter.sendMail(mailOptions, (error, info) => {
           if (error) {
-            res.status(error.status).send(console.log(error));
+            res.status(400).send(error.message);
           } else {
-            console.log("Email enviado");
-            res.status(200).jsonp(req.body);
+            res.status(200).jsonp({success: true});
           }
         })
 
     } else {
-        res.status(400).send("Not Allowed");
-    }
+        res.status(400).send({success: false})
 
-   
-        
-  
-  
-  });
+    }
 
   app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
     const status = err.status || 500;
     const message = err.message || err;
-    console.error(err);
     res.status(status).send(message);
   });
 
-app.listen(process.env.PORT || 3001);
+});
+
+// app.listen(PORT || 3000); FOR GLITCH
+// app.listen(PORT || 3001); FOR LOCALHOST
+app.listen(PORT || 3001);
